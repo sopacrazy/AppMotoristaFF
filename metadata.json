@@ -1,0 +1,8 @@
+{
+  "name": "FastTrack Delivery",
+  "description": "A modern mobile-first delivery management system for drivers.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}

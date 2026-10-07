@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestor — Mensagens para Motoristas</title>
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f1f5f9;
+    min-height: 100vh;
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .header {
+    width: 100%; max-width: 540px;
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px;
+  }
+  .header-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .header h1 { font-size: 20px; font-weight: 800; color: #1e293b; }
+  .header p { font-size: 12px; color: #94a3b8; }
+
+  .card {
+    background: #fff; border-radius: 20px; padding: 24px;
+    max-width: 540px; width: 100%;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.07);
+    margin-bottom: 18px;
+  }
+  .card-title { font-size: 14px; font-weight: 800; color: #1e293b; margin-bottom: 18px; text-transform: uppercase; letter-spacing: .04em; }
+
+  label { display: block; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  input[type="text"], textarea, select {
+    width: 100%; padding: 11px 14px;
+    border: 1.5px solid #e2e8f0; border-radius: 12px;
+    font-size: 14px; color: #1e293b; background: #f8fafc;
+    outline: none; transition: border-color .2s;
+    margin-bottom: 14px; font-family: inherit;
+  }
+  input:focus, textarea:focus, select:focus { border-color: #6366f1; background: #fff; }
+  textarea { min-height: 100px; resize: vertical; }
+
+  /* Upload de imagem */
+  .upload-area {
+    border: 2px dashed #cbd5e1; border-radius: 14px; padding: 18px;
+    text-align: center; cursor: pointer; transition: all .2s;
+    color: #94a3b8; font-size: 13px; margin-bottom: 14px;
+    position: relative;
+  }
+  .upload-area:hover, .upload-area.drag { border-color: #6366f1; background: #eef2ff; color: #6366f1; }
+  .upload-area input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-area .emoji { font-size: 28px; display: block; margin-bottom: 6px; }
+  #imgPreview { width: 100%; border-radius: 12px; margin-top: 10px; max-height: 200px; object-fit: cover; display: none; border: 1.5px solid #e2e8f0; }
+  .remove-img { margin-top: 6px; background: none; border: none; color: #ef4444; font-size: 12px; font-weight: 700; cursor: pointer; display: none; }
+
+  /* Buttons */
+  .btn { display: block; width: 100%; padding: 13px; border: none; border-radius: 13px; font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .15s, opacity .2s; }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; box-shadow: 0 4px 14px rgba(99,102,241,.3); }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: #fff; padding: 11px 22px;
+    border-radius: 99px; font-size: 14px; font-weight: 600;
+    opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999;
+  }
+  .toast.show { opacity: 1; }
+
+  /* Filtro historico */
+  .filter-row { display: flex; gap: 10px; margin-bottom: 14px; }
+  .filter-row input { margin-bottom: 0; flex: 1; }
+  .filter-row button { padding: 11px 16px; background: #f1f5f9; border: 1.5px solid #e2e8f0; border-radius: 12px; font-size: 13px; font-weight: 700; color: #64748b; cursor: pointer; white-space: nowrap; }
+  .filter-row button:hover { background: #e2e8f0; }
+
+  /* Message cards */
+  .msg-item {
+    background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 14px; margin-bottom: 10px; position: relative; transition: all .2s;
+  }
+  .msg-item.unread { background: #fffbeb; border-color: #fde68a; }
+  .msg-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .msg-driver-tag {
+    background: #eef2ff; color: #4f46e5; font-size: 11px; font-weight: 800;
+    padding: 3px 10px; border-radius: 99px; border: 1px solid #c7d2fe;
+  }
+  .msg-meta { font-size: 11px; color: #94a3b8; }
+  .msg-text { font-size: 13px; color: #334155; line-height: 1.55; margin-bottom: 10px; }
+  .msg-footer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .badge-lida { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 99px; }
+  .badge-lida.s { background: #dcfce7; color: #15803d; }
+  .badge-lida.n { background: #fef3c7; color: #b45309; }
+  .thumb { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; border: 1.5px solid #e2e8f0; cursor: pointer; transition: transform .15s; }
+  .thumb:hover { transform: scale(1.06); }
+  .del-btn { position: absolute; top: 12px; right: 12px; background: none; border: none; color: #cbd5e1; cursor: pointer; font-size: 17px; line-height: 1; }
+  .del-btn:hover { color: #ef4444; }
+  .empty, .loading-state { text-align: center; padding: 24px; font-size: 13px; color: #cbd5e1; }
+
+  /* Photo modal */
+  #photoModal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.92); z-index: 1000;
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  #photoModal.open { display: flex; }
+  #photoModal img { max-width: 100%; max-height: 88vh; border-radius: 16px; }
+  #photoModal .close-modal {
+    position: absolute; top: 14px; right: 14px;
+    background: rgba(255,255,255,.15); border: none; color: #fff;
+    font-size: 20px; width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+  }
+
+  /* Upload progress */
+  .progress { height: 4px; background: #e2e8f0; border-radius: 99px; margin-top: 8px; overflow: hidden; display: none; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg,#6366f1,#a5b4fc); border-radius: 99px; width: 0; transition: width .3s; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">📢</div>
+  <div>
+    <h1>Mensagens</h1>
+    <p>Envie avisos individuais para os motoristas</p>
+  </div>
+</div>
+
+<!-- FORM ENVIO -->
+<div class="card">
+  <div class="card-title">✉️ Nova Mensagem</div>
+
+  <label for="motorista">Código do Motorista</label>
+  <input type="text" id="motorista" placeholder="Ex: 061" maxlength="20" />
+
+  <label for="msg">Mensagem</label>
+  <textarea id="msg" placeholder="Digite o aviso para o motorista..."></textarea>
+
+  <label>Imagem (opcional)</label>
+  <div class="upload-area" id="uploadArea">
+    <input type="file" id="fotoInput" accept="image/*" onchange="handleFileSelect(this)" />
+    <span class="emoji">🖼️</span>
+    <span id="uploadLabel">Clique ou arraste uma imagem aqui</span>
+  </div>
+  <div class="progress" id="uploadProgress"><div class="progress-bar" id="progressBar"></div></div>
+  <img id="imgPreview" src="" alt="Preview" />
+  <button class="remove-img" id="removeImgBtn" onclick="removeImage()">✕ Remover imagem</button>
+
+  <div style="text-align:center;color:#94a3b8;font-size:12px;margin:-6px 0 10px">— ou cole uma URL de imagem —</div>
+  <input type="text" id="urlInput" placeholder="https://... (URL da imagem)" oninput="handleUrlInput(this.value)" style="margin-bottom:14px" />
+
+  <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">
+    Enviar Mensagem
+  </button>
+</div>
+
+<!-- HISTÓRICO -->
+<div class="card">
+  <div class="card-title">📨 Mensagens Enviadas</div>
+
+  <div class="filter-row">
+    <input type="text" id="filtroInput" placeholder="Filtrar por código do motorista..." oninput="loadHistory()" />
+    <button onclick="loadHistory()">↻ Atualizar</button>
+  </div>
+
+  <div id="msgList"><div class="loading-state">Carregando...</div></div>
+</div>
+
+<!-- MODAL FOTO -->
+<div id="photoModal">
+  <button class="close-modal" onclick="closeModal()">✕</button>
+  <img id="modalImg" src="" alt="" />
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // A chave anon é pública, mas vem da configuração do servidor em vez do repositório.
+  const BUCKET = 'comprovantes';
+  let supabase = null;
+  fetch('/admin/public-config')
+    .then(async response => {
+      if (!response.ok) throw new Error('Supabase não configurado no servidor');
+      const { url, anonKey } = await response.json();
+      supabase = window.supabase.createClient(url, anonKey);
+    })
+    .catch(error => console.error('Configuração do Supabase indisponível:', error));
+
+  let uploadedUrl = null;
+  let uploadedMime = null;
+
+  function toast(msg, dur = 3500) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), dur);
+  }
+
+  // ---- URL direta ----
+  function handleUrlInput(val) {
+    uploadedUrl = val.trim() || null;
+    const preview = document.getElementById('imgPreview');
+    if (uploadedUrl) {
+      preview.src = uploadedUrl;
+      preview.style.display = 'block';
+      document.getElementById('removeImgBtn').style.display = 'block';
+    } else {
+      preview.style.display = 'none';
+      document.getElementById('removeImgBtn').style.display = 'none';
+    }
+  }
+
+  // ---- Upload via Supabase SDK ----
+  async function handleFileSelect(input) {
+    if (!input.files[0]) return;
+    const file = input.files[0];
+    document.getElementById('urlInput').value = '';
+    uploadedUrl = null;
+
+    // Preview local
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = document.getElementById('imgPreview');
+      img.src = e.target.result;
+      img.style.display = 'block';
+      document.getElementById('removeImgBtn').style.display = 'block';
+      document.getElementById('uploadLabel').textContent = file.name;
+    };
+    reader.readAsDataURL(file);
+
+    const progress = document.getElementById('uploadProgress');
+    const bar = document.getElementById('progressBar');
+    progress.style.display = 'block';
+    bar.style.width = '20%';
+    toast('⏳ Enviando imagem para o Supabase...');
+
+    try {
+      if (!supabase) throw new Error('Supabase ainda não está disponível. Tente novamente.');
+      const ext = file.name.split('.').pop() || 'jpg';
+      const fileName = `msg_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+
+      bar.style.width = '50%';
+
+      const { data, error } = await supabase.storage
+        .from(BUCKET)
+        .upload(fileName, file, { cacheControl: '3600', upsert: false });
+
+      bar.style.width = '90%';
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(fileName);
+      uploadedUrl = urlData.publicUrl;
+      bar.style.width = '100%';
+      toast('✅ Imagem carregada com sucesso!');
+    } catch (e) {
+      toast('❌ Erro no upload: ' + e.message);
+      console.error('Upload error:', e);
+      uploadedUrl = null;
+    } finally {
+      setTimeout(() => { progress.style.display = 'none'; bar.style.width = '0'; }, 800);
+    }
+  }
+
+  function removeImage() {
+    uploadedUrl = null;
+    document.getElementById('fotoInput').value = '';
+    document.getElementById('urlInput').value = '';
+    document.getElementById('imgPreview').style.display = 'none';
+    document.getElementById('removeImgBtn').style.display = 'none';
+    document.getElementById('uploadLabel').textContent = 'Clique ou arraste uma imagem aqui';
+  }
+
+  // ---- Envio ----
+  async function sendMessage() {
+    const motorista = document.getElementById('motorista').value.trim();
+    const mensagem = document.getElementById('msg').value.trim();
+
+    if (!motorista) { toast('⚠️ Informe o código do motorista!'); return; }
+    if (!mensagem) { toast('⚠️ Digite uma mensagem!'); return; }
+
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true; btn.textContent = 'Enviando...';
+
+    try {
+      const res = await fetch('/mensagens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motorista_id: motorista, mensagem, foto_url: uploadedUrl })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast('✅ Mensagem enviada para o motorista ' + motorista + '!');
+        document.getElementById('msg').value = '';
+        removeImage();
+        loadHistory();
+      } else {
+        toast('❌ ' + (data.error || 'Erro ao enviar'));
+      }
+    } catch {
+      toast('❌ Erro de conexão com o servidor.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Enviar Mensagem';
+    }
+  }
+
+  // ---- Histórico ----
+  async function loadHistory() {
+    const list = document.getElementById('msgList');
+    const filtro = document.getElementById('filtroInput').value.trim();
+    list.innerHTML = '<div class="loading-state">Carregando...</div>';
+
+    try {
+      const url = filtro
+        ? `/mensagens-admin?motorista_id=${encodeURIComponent(filtro)}`
+        : '/mensagens-admin';
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (!data.length) {
+        list.innerHTML = '<div class="empty">Nenhuma mensagem ainda.</div>';
+        return;
+      }
+
+      list.innerHTML = data.map(m => `
+        <div class="msg-item ${m.lida ? '' : 'unread'}" id="mi-${m.id}">
+          <button class="del-btn" onclick="deleteMsg(${m.id})" title="Deletar">🗑</button>
+          <div class="msg-head">
+            <span class="msg-driver-tag">Motorista ${m.motorista_id}</span>
+            <span class="msg-meta">${new Date(m.criado_em).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+          </div>
+          <p class="msg-text">${m.mensagem.replace(/\n/g, '<br>')}</p>
+          <div class="msg-footer">
+            ${m.foto_url ? `<img src="${m.foto_url}" class="thumb" onclick="openPhoto('${m.foto_url}')" title="Ver imagem" />` : ''}
+            <span class="badge-lida ${m.lida ? 's' : 'n'}">${m.lida ? '✓ Lida' : '● Não lida'}</span>
+          </div>
+        </div>
+      `).join('');
+    } catch {
+      list.innerHTML = '<div class="empty">Erro ao carregar mensagens.</div>';
+    }
+  }
+
+  async function deleteMsg(id) {
+    if (!confirm('Deseja deletar esta mensagem permanentemente?')) return;
+    try {
+      await fetch(`/mensagens/${id}`, { method: 'DELETE' });
+      document.getElementById('mi-' + id)?.remove();
+      toast('Mensagem deletada.');
+    } catch {
+      toast('❌ Erro ao deletar.');
+    }
+  }
+
+  function openPhoto(url) {
+    document.getElementById('modalImg').src = url;
+    document.getElementById('photoModal').classList.add('open');
+  }
+  function closeModal() {
+    document.getElementById('photoModal').classList.remove('open');
+  }
+
+  // Drag n drop
+  const area = document.getElementById('uploadArea');
+  area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('drag'); });
+  area.addEventListener('dragleave', () => area.classList.remove('drag'));
+  area.addEventListener('drop', e => {
+    e.preventDefault(); area.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('fotoInput').files = dt.files;
+      handleFileSelect(document.getElementById('fotoInput'));
+    }
+  });
+
+  // Init
+  loadHistory();
+  setInterval(loadHistory, 30000);
+</script>
+</body>
+</html>

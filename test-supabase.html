@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Supabase</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Teste de Configuração Supabase</h1>
+    
+    <div class="card">
+        <h2>1. Verificar Variáveis de Ambiente</h2>
+        <div id="env-check"></div>
+    </div>
+
+    <div class="card">
+        <h2>2. Testar Conexão com Supabase</h2>
+        <button onclick="testConnection()">Testar Conexão</button>
+        <div id="connection-result"></div>
+    </div>
+
+    <div class="card">
+        <h2>3. Testar Upload de Arquivo</h2>
+        <input type="file" id="fileInput" accept="image/*">
+        <button onclick="testUpload()">Testar Upload</button>
+        <div id="upload-result"></div>
+    </div>
+
+    <script type="module">
+        // Importar Supabase
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        const SUBS_URL = import.meta.env.VITE_SUPABASE_URL;
+        const SUBS_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const BUCKET_NAME = 'comprovantes';
+
+        // Verificar variáveis
+        const envCheck = document.getElementById('env-check');
+        const urlStatus = SUBS_URL ? '✅ Configurado' : '❌ Não configurado';
+        const keyStatus = SUBS_KEY ? '✅ Configurado' : '❌ Não configurado';
+        
+        envCheck.innerHTML = `
+            <div class="status ${SUBS_URL ? 'success' : 'error'}">
+                <strong>VITE_SUPABASE_URL:</strong> ${urlStatus}<br>
+                ${SUBS_URL ? `<small>${SUBS_URL.substring(0, 50)}...</small>` : ''}
+            </div>
+            <div class="status ${SUBS_KEY ? 'success' : 'error'}">
+                <strong>VITE_SUPABASE_ANON_KEY:</strong> ${keyStatus}<br>
+                ${SUBS_KEY ? `<small>${SUBS_KEY.substring(0, 30)}...</small>` : ''}
+            </div>
+        `;
+
+        window.testConnection = async () => {
+            const resultDiv = document.getElementById('connection-result');
+            resultDiv.innerHTML = '<div class="info">Testando conexão...</div>';
+
+            if (!SUBS_URL || !SUBS_KEY) {
+                resultDiv.innerHTML = '<div class="error">❌ Variáveis não configuradas!</div>';
+                return;
+            }
+
+            try {
+                const supabase = createClient(SUBS_URL, SUBS_KEY);
+                
+                // Testar listagem de buckets
+                const { data: buckets, error } = await supabase.storage.listBuckets();
+                
+                if (error) {
+                    resultDiv.innerHTML = `<div class="error">❌ Erro: ${error.message}</div>`;
+                    return;
+                }
+
+                const bucketExists = buckets.some(b => b.name === BUCKET_NAME);
+                
+                resultDiv.innerHTML = `
+                    <div class="success">✅ Conexão estabelecida!</div>
+                    <div class="status ${bucketExists ? 'success' : 'error'}">
+                        <strong>Bucket "${BUCKET_NAME}":</strong> ${bucketExists ? '✅ Encontrado' : '❌ Não encontrado'}
+                    </div>
+                    <pre>Buckets disponíveis: ${buckets.map(b => b.name).join(', ')}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Erro: ${error.message}</div>`;
+            }
+        };
+
+        window.testUpload = async () => {
+            const fileInput = document.getElementById('fileInput');
+            const resultDiv = document.getElementById('upload-result');
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultDiv.innerHTML = '<div class="error">❌ Selecione um arquivo primeiro!</div>';
+                return;
+            }
+
+            if (!SUBS_URL || !SUBS_KEY) {
+                resultDiv.innerHTML = '<div class="error">❌ Variáveis não configuradas!</div>';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            resultDiv.innerHTML = '<div class="info">📤 Enviando arquivo...</div>';
+
+            try {
+                const supabase = createClient(SUBS_URL, SUBS_KEY);
+                const fileName = `test_${Date.now()}.${file.name.split('.').pop()}`;
+
+                const { data, error } = await supabase.storage
+                    .from(BUCKET_NAME)
+                    .upload(fileName, file, {
+                        cacheControl: '3600',
+                        upsert: false
+                    });
+
+                if (error) {
+                    resultDiv.innerHTML = `
+                        <div class="error">❌ Erro no upload: ${error.message}</div>
+                        <pre>${JSON.stringify(error, null, 2)}</pre>
+                    `;
+                    return;
+                }
+
+                const { data: urlData } = supabase.storage
+                    .from(BUCKET_NAME)
+                    .getPublicUrl(fileName);
+
+                resultDiv.innerHTML = `
+                    <div class="success">✅ Upload realizado com sucesso!</div>
+                    <div class="info">
+                        <strong>URL:</strong> <a href="${urlData.publicUrl}" target="_blank">${urlData.publicUrl}</a>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Erro: ${error.message}</div>`;
+            }
+        };
+    </script>
+</body>
+</html>
