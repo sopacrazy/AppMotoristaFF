@@ -25,8 +25,8 @@ dev-dist/
 google-services.json
 
 # Generated packages and update archives
-updates/
 *.zip
+!updates/*.zip
 *.apk
 *.aab
 
